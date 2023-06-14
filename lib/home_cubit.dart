@@ -1,7 +1,9 @@
 import 'dart:developer';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:point_of_sales/home_state.dart';
 
 class HomeCubit extends Cubit<HomeState> {
@@ -20,7 +22,6 @@ class HomeCubit extends Cubit<HomeState> {
       emit(state.copyWith(
           status: Status.error,
           errorMessage: 'Location services are disabled.'));
-      return;
     }
 
     // Check permission to access gps
@@ -31,7 +32,6 @@ class HomeCubit extends Cubit<HomeState> {
         emit(state.copyWith(
             status: Status.error,
             errorMessage: 'Location permissions are denied'));
-        return;
       }
     }
 
@@ -41,16 +41,29 @@ class HomeCubit extends Cubit<HomeState> {
           status: Status.error,
           errorMessage:
               'Location permissions are permanently denied, we cannot request permissions.'));
-      return;
     }
 
     try {
       final currentLatlong = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
+          timeLimit: const Duration(seconds: 5),
+          desiredAccuracy: LocationAccuracy.bestForNavigation);
       emit(state.copyWith(
           status: Status.complete, latlongPosition: currentLatlong));
-      log(currentLatlong.toString());
     } catch (e) {
+      emit(state.copyWith(status: Status.error, errorMessage: e.toString()));
+    }
+  }
+
+  Future<void> getAddressFromLonglat(LatLng? position) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+          position?.latitude ?? 0, position?.longitude ?? 0);
+      Placemark place = placemarks.first;
+      log('addressDetail ==> $place');
+      emit(state.copyWith(status: Status.complete, addressDetail: place));
+      log('ojan cubit ==> ${state.addressDetail}');
+    } catch (e) {
+      log('Error when reversing geocode ==> $e');
       emit(state.copyWith(status: Status.error, errorMessage: e.toString()));
     }
   }
